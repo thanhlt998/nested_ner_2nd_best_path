@@ -4,25 +4,27 @@ import re
 from collections import defaultdict
 import os
 import json
+from nltk import sent_tokenize
 
 annotator = VnCoreNLP(address="http://127.0.0.1", port=9000)
 
-s = """Chiều 22-9 tại <ENAMEX TYPE="LOCATION">TPHCM</ENAMEX>, <ENAMEX TYPE="ORGANIZATION">Trung tâm Hỗ trợ phụ nữ và Chăm sóc sức khỏe sinh sản</ENAMEX> - <ENAMEX TYPE="ORGANIZATION">Hội Liên hiệp Phụ nữ <ENAMEX TYPE="LOCATION">Việt Nam</ENAMEX></ENAMEX> đã tổ chức buổi hội thảo “Tác hại nghiêm trọng của chất coumarin trong thuốc lá nhập lậu đối với sức khỏe thai phụ và thai nhi”."""
-s2 = """Như <ENAMEX TYPE="ORGANIZATION">Thanh Niên</ENAMEX> đã đưa tin, sáng 17.9, bệnh nhân <ENAMEX TYPE="PERSON">Đ.</ENAMEX> đến <ENAMEX TYPE="ORGANIZATION">Bệnh viện (BV) phẫu thuật thẩm mỹ EMCSA</ENAMEX> (<ENAMEX TYPE="LOCATION">số 14/27 Hoàng Dư Khương</ENAMEX>, <ENAMEX TYPE="LOCATION">P.12</ENAMEX>, <ENAMEX TYPE="LOCATION">Q.10</ENAMEX>, <ENAMEX TYPE="LOCATION">TP.HCM</ENAMEX>) mổ chỉnh xương hai hàm hai bên. Ca mổ do bác sĩ <ENAMEX TYPE="PERSON">T.N.Q.P</ENAMEX> thực hiện."""
+# s = """Chiều 22-9 tại <ENAMEX TYPE="LOCATION">TPHCM</ENAMEX>, <ENAMEX TYPE="ORGANIZATION">Trung tâm Hỗ trợ phụ nữ và Chăm sóc sức khỏe sinh sản</ENAMEX> - <ENAMEX TYPE="ORGANIZATION">Hội Liên hiệp Phụ nữ <ENAMEX TYPE="LOCATION">Việt Nam</ENAMEX></ENAMEX> đã tổ chức buổi hội thảo “Tác hại nghiêm trọng của chất coumarin trong thuốc lá nhập lậu đối với sức khỏe thai phụ và thai nhi”."""
+# s2 = """Như <ENAMEX TYPE="ORGANIZATION">Thanh Niên</ENAMEX> đã đưa tin, sáng 17.9, bệnh nhân <ENAMEX TYPE="PERSON">Đ.</ENAMEX> đến <ENAMEX TYPE="ORGANIZATION">Bệnh viện (BV) phẫu thuật thẩm mỹ EMCSA</ENAMEX> (<ENAMEX TYPE="LOCATION">số 14/27 Hoàng Dư Khương</ENAMEX>, <ENAMEX TYPE="LOCATION">P.12</ENAMEX>, <ENAMEX TYPE="LOCATION">Q.10</ENAMEX>, <ENAMEX TYPE="LOCATION">TP.HCM</ENAMEX>) mổ chỉnh xương hai hàm hai bên. Ca mổ do bác sĩ <ENAMEX TYPE="PERSON">T.N.Q.P</ENAMEX> thực hiện."""
+#
+# tree = etree.XML("<root>" + s + "</root>")
+#
+# root: etree._Element = tree.xpath('/root')[0]
 
-tree = etree.XML("<root>" + s + "</root>")
 
-root: etree._Element = tree.xpath('/root')[0]
-
-
-def parse(node: etree._Element, n_prev_tokens=0, ):
+def parse(node: etree._Element, all_tokens: list, n_prev_tokens=0, ):
     n_tokens = 0
     for e in node.xpath("./text()|*"):
         if type(e) is etree._ElementUnicodeResult:
-            tokens = str(e).strip().split()
+            tokens = sum(annotator.tokenize(re.sub('&amp;', '&', str(e))), [])
+            all_tokens.extend(tokens)
             n_tokens += len(tokens)
         else:
-            n_tokens += parse(e, n_prev_tokens=n_prev_tokens + n_tokens)
+            n_tokens += parse(e, all_tokens=all_tokens, n_prev_tokens=n_prev_tokens + n_tokens)
 
     node.set('start_pos', str(n_prev_tokens))
     node.set('end_pos', str(n_prev_tokens + n_tokens))
@@ -42,7 +44,7 @@ def decode_tag(doc):
 
 
 def remove_tag(doc):
-    doc = re.sub(r'<[^>]+>', ' ', doc).strip()
+    doc = re.sub(r'<[^>]+>', ' ', doc)
     return re.sub(r'\s+', ' ', doc)
 
 
@@ -50,14 +52,15 @@ def parse_sentence(sent):
     sent = re.sub('&', '&amp;', sent)
     xml_tree = etree.XML(f"<root>{sent}</root>")
     root: etree._Element = xml_tree.xpath('/root')[0]
-    parse(root)
+    tokens = []
+    parse(root, tokens)
     labels = defaultdict(list)
     for e in root.iter('ENAMEX'):
         e: etree._Element
         start_pos = int(e.get('start_pos'))
         end_pos = int(e.get('end_pos'))
         labels[e.get('TYPE')[:3]].append([start_pos, end_pos])
-    return dict(labels)
+    return ' '.join(tokens), dict(labels)
 
 
 def merge_sentences(sentences):
@@ -65,7 +68,7 @@ def merge_sentences(sentences):
     curr_sentence = sentences[0]
     for sentence in sentences[1:]:
         try:
-            etree.XML(re.sub('&', '&amp;', curr_sentence))
+            etree.XML(f"<root>{re.sub('&', '&amp;', curr_sentence)}</root>")
             fix_sentences.append(curr_sentence)
             curr_sentence = sentence
         except Exception as e:
@@ -75,19 +78,15 @@ def merge_sentences(sentences):
 
 
 def parse_document(doc):
-    doc = re.sub('[\ufeff\xa0]', '', doc).strip()
-    doc = encode_tag(doc)
-    sentences = annotator.tokenize(doc)
-    sentences = [
-        decode_tag(' '.join(sent))
-        for sent in sentences
-    ]
+    doc = re.sub('[\ufeff|\xa0]', ' ', doc).strip()
+    doc = re.sub(r'\s+', ' ', doc)
+    sentences = sent_tokenize(doc)
     sentences = merge_sentences(sentences)
 
     result = []
     for sent in sentences:
         try:
-            result.append((remove_tag(sent), parse_sentence(sent)))
+            result.append(parse_sentence(sent))
         except Exception as e:
             raise Exception(f'error in {sent}')
 

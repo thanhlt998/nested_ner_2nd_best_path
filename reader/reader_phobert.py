@@ -13,9 +13,10 @@ SEP = '</s>'
 
 
 class Reader:
-    def __init__(self, bert_model: str) -> None:
+    def __init__(self, bert_model: str, max_seq_len=256,) -> None:
 
         self.bert_tokenizer: PhobertTokenizer = PhobertTokenizer.from_pretrained(bert_model,)
+        self.max_seq_len = max_seq_len
 
         self.subword_alphabet: Optional[Alphabet] = None
         self.label_alphabet: Optional[Alphabet] = None
@@ -25,10 +26,11 @@ class Reader:
         self.test: Optional[List[SentInst]] = None
 
     @staticmethod
-    def _read_file(filename: str, mode: str = 'train') -> List[SentInst]:
+    def _read_file(filename: str, mode: str = 'train', max_seq_length=256,) -> List[SentInst]:
         sent_list = []
         max_len = 0
         num_thresh = 0
+        ignored_lines = 0
         with open(filename) as f:
             for line in f:
                 line = line.strip()
@@ -36,6 +38,12 @@ class Reader:
                     break
 
                 raw_tokens = line.split(' ')
+                if len(raw_tokens) > max_seq_length:
+                    ignored_lines += 1
+                    next(f)
+                    next(f)
+                    continue
+
                 tokens = raw_tokens
                 chars = [list(t) for t in raw_tokens]
 
@@ -69,6 +77,7 @@ class Reader:
                 sent_list.append(sent_inst)
         print("Max length: {}".format(max_len))
         print("Threshold 6: {}".format(num_thresh))
+        print(f"Ignored lines: {ignored_lines}")
         return sent_list
 
     def _gen_dic(self) -> None:
@@ -196,9 +205,9 @@ class Reader:
         return tuple(ret_list)
 
     def read_all_data(self, file_path: str, train_file: str, dev_file: str, test_file: str) -> None:
-        self.train = self._read_file(file_path + train_file)
-        self.dev = self._read_file(file_path + dev_file, mode='dev')
-        self.test = self._read_file(file_path + test_file, mode='test')
+        self.train = self._read_file(file_path + train_file, mode='train', max_seq_length=self.max_seq_len,)
+        self.dev = self._read_file(file_path + dev_file, mode='dev', max_seq_length=self.max_seq_len,)
+        self.test = self._read_file(file_path + test_file, mode='test', max_seq_length=self.max_seq_len)
         self._gen_dic()
 
     def debug_single_sample(self,
