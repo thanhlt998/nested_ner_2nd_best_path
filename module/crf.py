@@ -274,7 +274,7 @@ class ChainCRF4NestedNER(nn.Module):
         indices_3 = torch.cat((self.indices_bs.unsqueeze(0),
                                self.indices_is.repeat((length - 2, 1)),
                                self.indices_es.unsqueeze(0)),
-                              dim=0)
+                              dim=0).to(energy.device)
 
         pointer_1 = energy.new_zeros((length, num_label)).long()
         pointer_3 = energy.new_zeros((length, num_label)).long()
