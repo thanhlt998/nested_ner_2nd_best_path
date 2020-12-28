@@ -271,6 +271,11 @@ for e_ in range(1, config.epoch + 1):
     else:
         if f1 >= best_per + config.eps:
             n_patient = 0
+            best_per = f1
+            del best_model
+            best_model = copy.deepcopy(ner_model)
+            torch.save(best_model.state_dict(), config.best_model_path)
+            logger.info(f"saved best_model in {config.best_model_path} with f1={f1}")
         else:
             n_patient += 1
 
