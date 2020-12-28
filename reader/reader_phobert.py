@@ -26,7 +26,7 @@ class Reader:
         self.test: Optional[List[SentInst]] = None
 
     @staticmethod
-    def _read_file(filename: str, mode: str = 'train', max_seq_length=256,) -> List[SentInst]:
+    def _read_file(filename: str, mode: str = 'train', tokenizer: PhobertTokenizer=None, max_seq_length=256, ) -> List[SentInst]:
         sent_list = []
         max_len = 0
         num_thresh = 0
@@ -38,7 +38,7 @@ class Reader:
                     break
 
                 raw_tokens = line.split(' ')
-                if len(raw_tokens) > max_seq_length:
+                if len(tokenizer.tokenize(line)) > max_seq_length:
                     ignored_lines += 1
                     next(f)
                     next(f)
@@ -205,9 +205,12 @@ class Reader:
         return tuple(ret_list)
 
     def read_all_data(self, file_path: str, train_file: str, dev_file: str, test_file: str) -> None:
-        self.train = self._read_file(file_path + train_file, mode='train', max_seq_length=self.max_seq_len,)
-        self.dev = self._read_file(file_path + dev_file, mode='dev', max_seq_length=self.max_seq_len,)
-        self.test = self._read_file(file_path + test_file, mode='test', max_seq_length=self.max_seq_len)
+        self.train = self._read_file(file_path + train_file, mode='train', max_seq_length=self.max_seq_len,
+                                     tokenizer=self.bert_tokenizer)
+        self.dev = self._read_file(file_path + dev_file, mode='dev', max_seq_length=self.max_seq_len,
+                                   tokenizer=self.bert_tokenizer)
+        self.test = self._read_file(file_path + test_file, mode='test', max_seq_length=self.max_seq_len,
+                                    tokenizer=self.bert_tokenizer)
         self._gen_dic()
 
     def debug_single_sample(self,
