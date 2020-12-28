@@ -26,7 +26,7 @@ class Config:
         self.lstm_dropout: float = 0.50
 
         # for training
-        self.epoch: int = 500
+        self.epoch: int = 30
         self.if_gpu: bool = True
         self.opt: Optimizer = Optimizer.AdaBound
         self.lr: float = 0.001 if self.opt != Optimizer.SGD else 0.1
@@ -45,6 +45,12 @@ class Config:
         self.config_data_path: str = self.data_path + "_config.pkl"
         self.model_root_path: str = self.root_path + "/dumps"
         self.model_path: str = self.model_root_path + "/{}_model".format(self.data_set)
+
+        self.best_model_path: str = self.model_root_path + f"/{self.data_set}_best.pth"
+        self.early_stopping: bool = True
+        self.eps = 1e-4
+        self.monitor_metrics = 'f1'
+        self.n_patient = 5
 
     def __repr__(self) -> str:
         return str(vars(self))

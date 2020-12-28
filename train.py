@@ -189,6 +189,7 @@ train_all_batches = list(zip(train_input_ids_batches,
 
 train_start_time = time.time()
 num_batches = len(train_all_batches)
+n_patient = 0
 for e_ in range(1, config.epoch + 1):
     logger.info("Epoch {:d} (learning rate={:.4f}):".format(e_, optimizer.param_groups[0]['lr']))
     train_err = 0.
@@ -256,15 +257,29 @@ for e_ in range(1, config.epoch + 1):
     logger.info("")
 
     # early stop
-    if f1 > best_per:
-        best_per = f1
-        del best_model
-        best_model = copy.deepcopy(ner_model)
     if train_err < best_loss:
         best_loss = train_err
+
+    if not config.early_stopping:
+        if f1 > best_per:
+            best_per = f1
+            del best_model
+            best_model = copy.deepcopy(ner_model)
+            torch.save(best_model.state_dict(), config.best_model_path)
+            logger.info(f"saved best_model in {config.best_model_path} with f1={f1}")
+    else:
+        if f1 >= best_per + config.eps:
+            n_patient = 0
+        else:
+            n_patient += 1
+
+        if n_patient > config.n_patient:
+            break
+
     if not adjust_learning_rate(lr_scheduler, e_, train_err, f1):
         break
 
+logger.info("#" * 10 + "end training" + "#" * 10)
 logger.info("training step took {:.4f} seconds".format(time.time() - train_start_time))
 logger.info("best dev F1: {:.2f}%".format(best_per * 100.))
 logger.info("")
