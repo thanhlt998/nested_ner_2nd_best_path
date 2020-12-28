@@ -1,0 +1,7 @@
+__pycache__
+.DS_Store
+data
+dumps
+raw_data
+.idea
+vncorenlplib
