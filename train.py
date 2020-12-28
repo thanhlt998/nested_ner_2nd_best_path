@@ -165,7 +165,8 @@ logger.info(config)  # print training setting
 
 ner_model = BiRecurrentConvCRF4NestedNER(config.bert_model, config.label_size,
                                          hidden_size=config.hidden_size, layers=config.layers,
-                                         lstm_dropout=config.lstm_dropout)
+                                         lstm_dropout=config.lstm_dropout,
+                                         fine_tune=config.fine_tune)
 if config.if_gpu:
     ner_model = ner_model.cuda()
 

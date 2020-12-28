@@ -35,6 +35,8 @@ class Config:
         self.check_every: int = 1
         self.clip_norm: int = 5
 
+        self.fine_tune: bool = False
+
         # for early stop
         self.lr_patience: int = 3 if self.opt != Optimizer.SGD else 5
 
